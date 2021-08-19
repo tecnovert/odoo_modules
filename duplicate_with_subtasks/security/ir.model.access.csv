@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_duplicate_with_subtasks_duplicate_with_subtasks,duplicate_with_subtasks.duplicate_with_subtasks,model_duplicate_with_subtasks_duplicate_with_subtasks,base.group_user,1,1,1,1
