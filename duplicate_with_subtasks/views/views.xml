@@ -10,5 +10,14 @@
         <field name="code">action = records.copy_all()</field>
     </record>
 
+    <record id="act_rename_subtasks" model="ir.actions.server">
+        <field name="name">Rename subtasks</field>
+        <field name="model_id" ref="project.model_project_task"/>
+        <field name="binding_model_id" ref="project.model_project_task"/>
+        <field name="binding_view_types">form</field>
+        <field name="state">code</field>
+        <field name="code">action = records.rename_subtasks()</field>
+    </record>
+
   </data>
 </odoo>

@@ -7,7 +7,10 @@
 
     'description': """
         Duplicate tasks and subtasks.
-        Adds a new option to Task view -> Actions
+
+        Adds two new options to Task view -> Actions
+         - Duplicate with subtasks: Duplicate the task and all linked subtasks.
+         - Rename subtasks: Update the names of subtasks to match the name of the parent task only works from parent task.
     """,
 
     'author': "tecnovert",

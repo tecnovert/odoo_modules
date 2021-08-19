@@ -3,6 +3,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 from odoo import models, fields, api, _
+from odoo.exceptions import UserError
+
 
 class Task(models.Model):
     _inherit = 'project.task'
@@ -35,9 +37,8 @@ class Task(models.Model):
             child.duplicate_subtasks(new_task.child_ids[-1])
         return
 
-    @api.returns('self', lambda value: value.id)
     def copy_all(self, default=None):
-        logger.info("copy_all task %d", self.id);
+        logger.info("copy_all task %d", self.id)
         new_task = super(Task, self).copy(default)
         self.duplicate_subtasks(new_task)
 
@@ -47,3 +48,30 @@ class Task(models.Model):
             "res_model": new_task._name,
             "res_id": new_task.id,
         }
+
+    def rename_subtasks(self, new_name=None):
+        logger.info("rename_subtasks %d", self.id)
+
+        if new_name is None:
+            if self.parent_id:
+                logger.warning("Only works from the root task.")
+                raise UserError(_('Can only rename from root tasks.'))
+            new_name = self.name
+
+        if not self.child_ids:
+            logger.warning("No subtasks to rename.")
+            return
+        renamed = 0
+        for child in self.child_ids:
+            try:
+                new_child_name = new_name + ':' + child.name.split(':', 1)[1]
+            except Exception as e:
+                 logger.warning("Not updating child %d name: %s.", child.id, str(e))
+                 continue
+            child.update({
+                    'name': new_child_name,
+                })
+            child.rename_subtasks(new_name)
+            renamed += 1
+
+        return
