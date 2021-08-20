@@ -2,6 +2,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
+from datetime import timedelta
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
@@ -69,7 +70,7 @@ class ActivityHistory(models.Model):
             activity.name_rel = activity.res_model and \
                 self.env[activity.res_model].browse(activity.res_id).display_name
 
-    name_rel = fields.Char(compute='_compute_res_name', store=False)
+    name_rel = fields.Char('Name', compute='_compute_res_name', store=False)
 
     def link_to_task(self):
         return {
@@ -114,16 +115,29 @@ class MailActivity(models.Model):
 class Task(models.Model):
     _inherit = 'project.task'
 
+    def have_near_record(self, res_model_id, self_id):
+        seconds_ago = fields.Datetime.now() - timedelta(seconds=5)
+        num_records = self.env['project.activity_history'].search_count([
+            ('res_model_id', '=', res_model_id),
+            ('res_id', '=', self_id),
+            ('changed_by', '=', self.env.user.id),
+            ('changed_at', '>', seconds_ago)])
+
+        return True if num_records > 0 else False
+
     @api.model_create_multi
     def create(self, vals):
         rv = super().create(vals)
+        res_model_id = self.env.ref('project.model_project_task').id
 
         for task in rv:
+            if self.have_near_record(res_model_id, task.id):
+                continue
             create_values = {
                 'changed_at': fields.Datetime.now(),
                 'changed_by': self.env.user.id,
                 'entry_type': 'create',
-                'res_model_id': self.env.ref('project.model_project_task').id,
+                'res_model_id': res_model_id,
                 'res_id': task.id,
             }
             id_created = self.env['project.activity_history'].create([create_values])
@@ -131,14 +145,16 @@ class Task(models.Model):
         return rv
 
     def write(self, vals):
-        create_values = {
-            'changed_at': fields.Datetime.now(),
-            'changed_by': self.env.user.id,
-            'entry_type': 'edit',
-            'res_model_id': self.env.ref('project.model_project_task').id,
-            'res_id': self.id,
-        }
-        id_created = self.env['project.activity_history'].create([create_values])
+        res_model_id = self.env.ref('project.model_project_task').id
+        if not self.have_near_record(res_model_id, self.id):
+            create_values = {
+                'changed_at': fields.Datetime.now(),
+                'changed_by': self.env.user.id,
+                'entry_type': 'edit',
+                'res_model_id': res_model_id,
+                'res_id': self.id,
+            }
+            id_created = self.env['project.activity_history'].create([create_values])
 
         return super().write(vals)
 
@@ -159,27 +175,16 @@ class Task(models.Model):
         '''
         return super().unlink()
 
-    @api.model
-    def message_new(self, msg, custom_values=None):
-        create_values = {
-            'changed_at': fields.Datetime.now(),
-            'changed_by': self.env.user.id,
-            'entry_type': 'note',
-            'res_model_id': self.env.ref('project.model_project_task').id,
-            'res_id': self.id,
-        }
-        id_created = self.env['project.activity_history'].create([create_values])
-
-        return super().message_new(msg, custom_values)
-
     def _message_create(self, values_list):
-        create_values = {
-            'changed_at': fields.Datetime.now(),
-            'changed_by': self.env.user.id,
-            'entry_type': 'note',
-            'res_model_id': self.env.ref('project.model_project_task').id,
-            'res_id': self.id,
-        }
-        id_created = self.env['project.activity_history'].create([create_values])
+        res_model_id = self.env.ref('project.model_project_task').id
+        if not self.have_near_record(res_model_id, self.id):
+            create_values = {
+                'changed_at': fields.Datetime.now(),
+                'changed_by': self.env.user.id,
+                'entry_type': 'note',
+                'res_model_id': res_model_id,
+                'res_id': self.id,
+            }
+            id_created = self.env['project.activity_history'].create([create_values])
 
         return super()._message_create(values_list)
