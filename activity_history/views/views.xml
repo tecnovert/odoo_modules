@@ -1,0 +1,40 @@
+<odoo>
+  <data>
+
+    <record id="project_activity_history_view_tree" model="ir.ui.view">
+    <field name="name">project.activity_history.tree</field>
+    <field name="model">project.activity_history</field>
+    <field name="arch" type="xml">
+        <tree string="Channel" create="false" import="false" delete="false" default_order="changed_at desc">
+            <button name="link_to_task" string="View" class="oe_highlight" type="object"/>
+            <field name="entry_type"/>
+            <field name="name_rel"/>
+            <field name="changed_at"/>
+        </tree>
+    </field>
+    </record>
+
+    <record id="action_view_all_activity_history" model="ir.actions.act_window">
+        <field name="name">Activity History</field>
+        <field name="res_model">project.activity_history</field>
+        <field name="view_mode">tree</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No activity history found.
+            </p>
+        </field>
+        <field name="domain">['|', ('res_model_id', '=', False), ('res_model_id.model', '=', 'project.task')]</field>
+        <field name="context">{'default_res_model': 'project.task'}</field>
+    </record>
+
+    <menuitem id="menu_project_activity_history" name="Activity History"
+          action="action_view_all_activity_history"
+          groups="project.group_project_manager"
+          parent="project.menu_main_pm" sequence="98"/>
+
+    <menuitem id="menu_project_config2" name="Configuration2" parent="project.menu_main_pm"
+        sequence="100" groups="project.group_project_manager"/>
+
+
+  </data>
+</odoo>
