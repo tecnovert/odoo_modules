@@ -25,6 +25,7 @@ class ActivityHistory(models.Model):
         ('note', 'Added Note'),
         ('assign', 'Assigned'),
         ('unlink', 'Deleted'),
+        ('sched', 'Scheduled'),
         ('done', 'Done')], 'Type')
 
     activity_id = fields.Integer(string="Activity ID")
@@ -86,31 +87,56 @@ class ActivityHistory(models.Model):
 class MailActivity(models.Model):
     _inherit = 'mail.activity'
 
-    def unlink(self):
-        self.ensure_one()
-        fields_to_copy = [
-            'res_model_id',
-            'res_model',
-            'res_id',
-            'res_name',
-            'note',
-            'summary',
-            'activity_type_id',
-            'date_deadline',
-        ]
-        activity_values = self.read(fields_to_copy).pop()
+    def have_near_record(self, res_model_id, self_id):
+        seconds_ago = fields.Datetime.now() - timedelta(seconds=5)
+        num_records = self.env['project.activity_history'].search_count([
+            ('res_model_id', '=', res_model_id),
+            ('res_id', '=', self_id),
+            ('changed_by', '=', self.env.user.id),
+            ('changed_at', '>', seconds_ago)])
+
+        return True if num_records > 0 else False
+
+    @api.model
+    def create(self, values):
+        res_model_project_task_id = self.env.ref('project.model_project_task').id
+        try:
+            res_model_id = values['res_model_id']
+            res_id = values['res_id']
+            if res_model_id == res_model_project_task_id and \
+               not self.have_near_record(res_model_id, res_id):
+                create_values = {
+                    'changed_at': fields.Datetime.now(),
+                    'changed_by': self.env.user.id,
+                    'entry_type': 'sched',
+                    'res_model_id': res_model_id,
+                    'res_id': res_id,
+                }
+                id_created = self.env['project.activity_history'].create([create_values])
+        except Exception as e:
+            logger.error('Error overriding MailActivity create: %s', str(e))
+        return super().create(values)
+
+    def action_done(self):
+        res_model_project_task_id = self.env.ref('project.model_project_task').id
+        if self.res_model_id.id != res_model_project_task_id or \
+           self.have_near_record(res_model_project_task_id, self.res_id):
+            return super().action_done()
         create_values = {
-            field: value[0] if isinstance(value, tuple) else value for field, value in activity_values.items()
+            'changed_at': fields.Datetime.now(),
+            'changed_by': self.env.user.id,
+            'entry_type': 'done',
+            'res_model_id': res_model_id,
+            'res_id': res_id,
         }
-        create_values['changed_at'] = fields.Datetime.now()
-        create_values['changed_by'] = self.env.user.id
-        create_values['activity_id'] = self.id
-        create_values['entry_type'] = 'done'
-
         id_created = self.env['project.activity_history'].create([create_values])
+        return super().action_done()
 
+    '''
+    def unlink(self):
+        # ValueError: Expected singleton: mail.activity()
         return super().unlink()
-
+    '''
 
 class Task(models.Model):
     _inherit = 'project.task'
@@ -145,6 +171,8 @@ class Task(models.Model):
         return rv
 
     def write(self, vals):
+        if not self.id:
+            return super().write(vals)
         res_model_id = self.env.ref('project.model_project_task').id
         if not self.have_near_record(res_model_id, self.id):
             create_values = {
@@ -170,12 +198,11 @@ class Task(models.Model):
             'res_id': self.id,
         }
         id_created = self.env['project.activity_history'].create([create_values])
-
-        logger.info("[rm]unlink task 2 %d", self.id)
         '''
         return super().unlink()
 
     def _message_create(self, values_list):
+        # TODO: How to filter by message body here?
         res_model_id = self.env.ref('project.model_project_task').id
         if not self.have_near_record(res_model_id, self.id):
             create_values = {
@@ -188,3 +215,22 @@ class Task(models.Model):
             id_created = self.env['project.activity_history'].create([create_values])
 
         return super()._message_create(values_list)
+
+    '''
+    def activity_schedule(self, act_type_xmlid='', date_deadline=None, summary='', note='', **act_values):
+        # Isn't called?
+        logger.warning("[rm] activity_schedule")
+        res_model_id = self.env.ref('project.model_project_task').id
+        if not self.have_near_record(res_model_id, self.id):
+            create_values = {
+                'changed_at': fields.Datetime.now(),
+                'changed_by': self.env.user.id,
+                'entry_type': 'sched',
+                'res_model_id': res_model_id,
+                'res_id': self.id,
+            }
+            id_created = self.env['project.activity_history'].create([create_values])
+        return super().activity_schedule(act_type_xmlid=act_type_xmlid, date_deadline=date_deadline, summary=summary, note=note, **act_values)
+    '''
+    #def activity_unlink(self, act_type_xmlids, user_id=None):
+    #    return super().activity_unlink(act_type_xmlid=act_type_xmlid, user_id=user_id)
