@@ -21,6 +21,7 @@ class ActivityHistory(models.Model):
     entry_type = fields.Selection([
         ('create', 'Created'),
         ('edit', 'Edited'),
+        ('stage', 'Moved'),
         ('view', 'Viewed'),
         ('note', 'Added Note'),
         ('assign', 'Assigned'),
@@ -174,11 +175,19 @@ class Task(models.Model):
         if not self.id:
             return super().write(vals)
         res_model_id = self.env.ref('project.model_project_task').id
+
+        entry_type = 'edit'
+        # If a task is moved into a different kanban column it reorders the whole column, ignore.
+        if len(vals.keys()) == 1 and 'sequence' in vals.keys():
+            return super().write(vals)
+        if len(vals.keys()) < 2 and 'stage_id' in vals.keys():
+            entry_type = 'stage'
+
         if not self.have_near_record(res_model_id, self.id):
             create_values = {
                 'changed_at': fields.Datetime.now(),
                 'changed_by': self.env.user.id,
-                'entry_type': 'edit',
+                'entry_type': entry_type,
                 'res_model_id': res_model_id,
                 'res_id': self.id,
             }
